@@ -10,6 +10,9 @@ codegen-units = 1
 panic = "abort"
 strip = true
 
+[build-dependencies]
+cc = "1"
+
 [dependencies]
 aes = "0.9.1"
 cbc = "0.2.1"

